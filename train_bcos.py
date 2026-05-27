@@ -15,6 +15,7 @@ from bcos.data.transforms import AddInverse
 from bcos.models.resnet import resnet50
 from bcos.modules.bcosconv2d import BcosConv2d
 from bcos.optim import OptimizerFactory, LRSchedulerFactory
+from bcos.modules.losses import BinaryCrossEntropyLoss
 
 
 class LitModel(pl.LightningModule):
@@ -132,8 +133,8 @@ def train_cats_vs_dogs():
     )
 
     config = {
-        "criterion": nn.CrossEntropyLoss(),
-        "test_criterion": nn.CrossEntropyLoss(),
+        "criterion": BinaryCrossEntropyLoss(),
+        "test_criterion": BinaryCrossEntropyLoss(),
         "optimizer": OptimizerFactory(name="Adam", lr=0.001),
         "lr_scheduler": LRSchedulerFactory(name="cosineannealinglr", epochs=10),
     }
