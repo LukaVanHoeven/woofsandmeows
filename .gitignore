@@ -160,3 +160,9 @@ cython_debug/
 
 # Training data
 train/
+
+# Custom
+data/*
+~data/README.md
+experiments/*
+.vscode/
