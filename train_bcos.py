@@ -10,7 +10,7 @@ from pytorch_lightning.loggers import CSVLogger
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
-
+from torch import conv2d
 from bcos.data.transforms import AddInverse
 from bcos.models.resnet import resnet50
 from bcos.modules.bcosconv2d import BcosConv2d
@@ -60,7 +60,7 @@ class LitModel(pl.LightningModule):
         return dict(optimizer=opt, lr_scheduler=sched)
 
 
-def train_bcos(
+def train_model(
     model: nn.Module,
     config: dict,
     num_classes: int,
@@ -103,9 +103,39 @@ def train_bcos(
     trainer.fit(lit_model, train_loader, val_loader)
 
 
-def train_cats_vs_dogs():
-    pl.seed_everything(41, workers=True)
+def train_resnet(train_loader, val_loader, conv_layer, name):
+    pl.seed_everything(1, workers=True)
 
+    model = resnet50(
+        #num classes is used to calculate logit bias according to the paper
+        num_classes=2,
+        in_chans=6, 
+        small_inputs=False,
+        conv_layer=conv_layer,
+    )
+
+    config = {
+        "criterion": BinaryCrossEntropyLoss(),
+        "test_criterion": BinaryCrossEntropyLoss(),
+        "optimizer": OptimizerFactory(name="Adam", lr=0.001),
+        "lr_scheduler": LRSchedulerFactory(name="cosineannealinglr", epochs=10),
+    }
+
+    train_model(
+        model=model,
+        config=config,
+        num_classes=2,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        experiment_name=name,
+        max_epochs=10,
+    )
+
+
+
+
+
+if __name__ == "__main__":
     train_transform = transforms.Compose([
         transforms.Resize(128),
         transforms.RandomCrop(50),
@@ -124,70 +154,8 @@ def train_cats_vs_dogs():
 
     train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, num_workers=0)
+    bcos_conv_layer = partial(BcosConv2d, b=2, max_out=2)
 
-    model = resnet50(
-        num_classes=2,
-        in_chans=6,
-        small_inputs=True,
-        conv_layer=partial(BcosConv2d, b=2, max_out=2),
-    )
+    # train_resnet(train_loader, val_loader, bcos_conv_layer, "bcos50")
+    train_resnet(train_loader, val_loader, nn.Conv2d, "norm50")
 
-    config = {
-        "criterion": BinaryCrossEntropyLoss(),
-        "test_criterion": BinaryCrossEntropyLoss(),
-        "optimizer": OptimizerFactory(name="Adam", lr=0.001),
-        "lr_scheduler": LRSchedulerFactory(name="cosineannealinglr", epochs=10),
-    }
-
-    train_bcos(
-        model=model,
-        config=config,
-        num_classes=2,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        experiment_name="bcos_resnet20",
-        max_epochs=10,
-    )
-
-
-def visualize_explanation(
-    image_path: str = "cat.png",
-    checkpoint_path: str = "experiments/bcos_resnet20/last.ckpt",
-    save_path: str = "explanation.png",
-):
-    from PIL import Image
-
-    # This is the bcos model that is used in the paper as well
-    model = resnet50(
-        num_classes=2,
-        in_chans=6,
-        small_inputs=True,
-        conv_layer=partial(BcosConv2d, b=2, max_out=2),
-    )
-    ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-    state_dict = {
-        k.removeprefix("model."): v
-        for k, v in ckpt["state_dict"].items()
-        if k.startswith("model.")
-    }
-    model.load_state_dict(state_dict)
-    model.eval()
-
-    img = Image.open(image_path).convert("RGB")
-    tensor = AddInverse()(transforms.ToTensor()(img)).unsqueeze(0).requires_grad_(True)
-
-    result = model.explain(tensor)
-    print(f"Predicted: {['cat','dog'][result['prediction']]} (class {result['prediction']})")
-
-    explanation_img = result["explanation"]
-    Image.fromarray((explanation_img * 255).astype("uint8")).save(save_path)
-    print(f"Explanation saved to {save_path}")
-
-    with torch.no_grad(), model.explanation_mode():
-        probs = torch.softmax(model(tensor), dim=1)
-    print(f"Confidence: cat={probs[0,0]:.3f}, dog={probs[0,1]:.3f}")
-
-
-if __name__ == "__main__":
-    train_cats_vs_dogs()
-    visualize_explanation()
