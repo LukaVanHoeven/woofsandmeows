@@ -59,6 +59,8 @@ import torch
 from torch import Tensor
 from torch.utils.data import Dataset
 
+import soundfile as sf
+
 
 LABEL_MAP: dict[str, int] = {
     "cat": 0,
@@ -355,6 +357,8 @@ class CatDogAudioDataset(Dataset):
         values: list[np.ndarray] = []
         for i in indices:
             spec = self._load_spectrogram(i)
+            if self.transform is not None: #TODO: added this if statement to ensure normalisation is post-augmentation, is this right?
+                spec = self.transform(spec)
             values.append(spec.numpy().ravel())
 
         all_values = np.concatenate(values)
@@ -392,8 +396,18 @@ class CatDogAudioDataset(Dataset):
         path = self.files[idx]
         start = self.window_starts[idx]
 
-        waveform, sr = torchaudio.load(path)
+        ### Replace torchaudio.load with soundfile.read for ROCm compatibility ###
+        #waveform, sr = torchaudio.load(path)
+        waveform, sr = sf.read(path, dtype="float32")
+        waveform = torch.from_numpy(waveform)
 
+        if waveform.ndim == 1:
+            waveform = waveform.unsqueeze(0)
+        else:
+            waveform = waveform.T
+        ### TODO: maybe try look for a fix on ROCm ###
+
+        # Resample if the original sample rate is different from the target
         if sr != self.target_sr:
             waveform = torchaudio.functional.resample(
                 waveform, orig_freq=sr, new_freq=self.target_sr

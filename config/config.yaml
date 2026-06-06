@@ -13,7 +13,7 @@ general:
 jobs:
     job0:
         ### Data ###
-        sample_rate: [22050]
+        sample_rate: [22050] #TODO: The dataset has 16kHz sample rate, do we get better performance by upsampling?
         stride: [2.95] # seconds
         duration: [2.95] # seconds
         n_fft: [1024]
