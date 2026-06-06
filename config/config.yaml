@@ -9,12 +9,12 @@
 # parameter restrictions.
 
 general:
-    num_data_workers: 4 # Number of workers preparing batches.
+    num_data_workers: 4 # Number of workers preparing batches, set to 0 if you get memory issues.
 jobs:
     job0:
         ### Data ###
         sample_rate: [22050]
-        stride: [32]
+        stride: [32] # seconds
         duration: [3] # seconds
         n_fft: [1024]
         hop_length: [256]
@@ -23,15 +23,15 @@ jobs:
         train_val_split: [.8, .2] # Only used if k_folds == 1
         batch_size: [8]
         ### Model ###
-        model: "resnet18" # Can be from: [baseline, eegnet, eegnettransformer, all]
+        model: "resnet18" # Can be from: [resnet18, all]
         model_params: # Contents depend on the model used
-            fuck: 0
+            this_cant_be_empty_aparently: 69420
         optimiser: "adam"
         learning_rate: [0.0001]
         weight_decay: [0.0001]
-        n_epochs: 2
+        n_epochs: 20
         k_folds: 1  # use 1 to ignore
         ## Tune ###
-        # tune: true
-        # n_trials: 3
-        # n_startup_trials: 0
+        tune: false
+        n_trials: 15
+        n_startup_trials: 5
