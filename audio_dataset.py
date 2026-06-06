@@ -55,6 +55,7 @@ from typing import Callable, Optional, Tuple
 import wave
 import numpy as np
 import torchaudio
+import torch
 from torch import Tensor
 from torch.utils.data import Dataset
 
@@ -305,6 +306,12 @@ class CatDogAudioDataset(Dataset):
 
         if self.mean is not None and self.std is not None:
             spectrogram = (spectrogram - self.mean) / self.std
+
+        # AddInverse
+        # spectrogram = torch.cat(
+        #     [spectrogram, 1.0 - spectrogram],
+        #     dim=0
+        # )
 
         label: int = self.labels[idx]
 
