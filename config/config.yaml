@@ -14,11 +14,11 @@ jobs:
     job0:
         ### Data ###
         sample_rate: [22050]
-        stride: [32] # seconds
-        duration: [3] # seconds
+        stride: [2.95] # seconds
+        duration: [2.95] # seconds
         n_fft: [1024]
-        hop_length: [256]
-        n_mels: [80]
+        hop_length: [512]
+        n_mels: [128]
         top_db: [80]
         train_val_split: [.8, .2] # Only used if k_folds == 1
         batch_size: [8]

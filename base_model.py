@@ -91,25 +91,3 @@ class BaseModel(nn.Module):
             filename = destination
         self.logger.info(f"Saving model to {filename}...")
         torch.save(self.state_dict(), filename)
-
-    @classmethod
-    def load(cls, source: str, logger: logging.Logger)-> "BaseModel":
-        """
-        Load a model from a file.
-
-        :param source: Directory or .pth file to load the model from.
-        :type source: str
-        :param logger: Logger to assign to the loaded model, as it would
-            otherwise load the old logger.
-        :type logger: logging.Logger
-        :return: The loaded model instance.
-        :rtype: LSTM
-        """
-        filename = f"{source}/best_{cls.__name__}.pth"
-        if ".pth" in source:
-            filename = source
-        logger.info(f"Loading model from {filename}...")
-        state_dict = torch.load(filename, weights_only=True)
-        self.load_state_dict(state_dict)
-        model.logger = logger
-        return model
