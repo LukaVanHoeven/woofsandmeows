@@ -163,6 +163,9 @@ train/
 
 # Custom
 data/*
-~data/README.md
+!data/README.md
 experiments/*
 .vscode/
+output/*
+output/*/
+!output/.gitkeep
