@@ -543,25 +543,25 @@ def _process_model(
     ####################################################################
     #                         Test the model.                          #
     ####################################################################
-    # logger.info("Evaluating on test set.")
-    # logger.error("ONLY DO THIS AFTER HYPERPAREMTER TUNING!!")
-    # test_accuracy, test_predictions, test_targets = evaluate(
-    #     dataloader=test_dataloader, 
-    #     model=model,
-    #     device=DEVICE,
-    #     logger=logger,
-    # )
-    # logger.critical(f"Test accuracy: {test_accuracy}")
+    logger.info("Evaluating on test set.")
+    logger.error("ONLY DO THIS AFTER HYPERPAREMTER TUNING!!")
+    test_accuracy, test_predictions, test_targets = evaluate(
+        dataloader=test_dataloader, 
+        model=model,
+        device=DEVICE,
+        logger=logger,
+    )
+    logger.critical(f"Test accuracy: {test_accuracy}")
 
-    # plot_confusion_matrix(
-    #     test_targets,
-    #     test_predictions,
-    #     LABEL_MAP.keys(),
-    #     None,
-    #     "test",
-    #     handle_output.OUTPUT_DIR,
-    #     logger
-    # )
+    plot_confusion_matrix(
+        test_targets,
+        test_predictions,
+        LABEL_MAP.keys(),
+        None,
+        "test",
+        handle_output.OUTPUT_DIR,
+        logger
+    )
 
     return \
         max(train_metrics["accuracy"]), \
