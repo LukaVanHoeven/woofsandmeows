@@ -304,7 +304,8 @@ class CatDogAudioDataset(Dataset):
         label : int
             Class index: ``0`` for *cat*, ``1`` for *dog*.
         """
-        spectrogram = self._load_spectrogram(idx)
+        waveform = self.load_waveform(idx)
+        spectrogram = self._to_db(self._mel_transform(waveform))
 
         if self.mean is not None and self.std is not None:
             spectrogram = (spectrogram - self.mean) / self.std
@@ -324,7 +325,7 @@ class CatDogAudioDataset(Dataset):
             label = self.target_transform(label)
 
         return spectrogram, label
-
+    
     def fit_normalisation(self, indices: list[int]) -> None:
         """
         Compute mean and std from the log-mel spectrograms of the given
@@ -356,7 +357,8 @@ class CatDogAudioDataset(Dataset):
         """
         values: list[np.ndarray] = []
         for i in indices:
-            spec = self._load_spectrogram(i)
+            waveform = self.load_waveform(i)
+            spec = self._to_db(self._mel_transform(waveform))
             if self.transform is not None: #TODO: added this if statement to ensure normalisation is post-augmentation, is this right?
                 spec = self.transform(spec)
             values.append(spec.numpy().ravel())
@@ -374,11 +376,10 @@ class CatDogAudioDataset(Dataset):
         self.mean = mean
         self.std = std
 
-    def _load_spectrogram(self, idx: int) -> Tensor:
+    def load_waveform(self, idx: int) -> Tensor:
         """
-        Load the waveform for window *idx*, slice it, and return the
-        raw log-mel spectrogram **without** normalisation or user
-        transforms applied.
+        Load the waveform for window *idx*, slice it, and return it **without** 
+        any transformations, normalisation or user transforms applied.
 
         Used internally by both ``__getitem__`` and
         ``fit_normalisation``.
@@ -391,7 +392,7 @@ class CatDogAudioDataset(Dataset):
         Returns
         -------
         Tensor
-            Log-mel spectrogram of shape ``(1, n_mels, time_frames)``.
+            Waveform of shape ``(1, num_samples)``.
         """
         path = self.files[idx]
         start = self.window_starts[idx]
@@ -420,4 +421,4 @@ class CatDogAudioDataset(Dataset):
         # start + num_samples <= total_samples was enforced in __init__.
         waveform = waveform[:, start : start + self.num_samples]
 
-        return self._to_db(self._mel_transform(waveform))
+        return waveform
