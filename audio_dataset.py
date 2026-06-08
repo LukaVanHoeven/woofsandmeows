@@ -307,6 +307,9 @@ class CatDogAudioDataset(Dataset):
         waveform = self.load_waveform(idx)
         spectrogram = self._to_db(self._mel_transform(waveform))
 
+        if self.transform is not None:
+            spectrogram = self.transform(spectrogram)
+
         if self.mean is not None and self.std is not None:
             spectrogram = (spectrogram - self.mean) / self.std
 
@@ -317,9 +320,6 @@ class CatDogAudioDataset(Dataset):
         # )
 
         label: int = self.labels[idx]
-
-        if self.transform is not None:
-            spectrogram = self.transform(spectrogram)
 
         if self.target_transform is not None:
             label = self.target_transform(label)
