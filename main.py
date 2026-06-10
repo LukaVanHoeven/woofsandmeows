@@ -16,6 +16,7 @@ import yaml
 import optuna
 
 from resnet_18 import make_resnet18
+from resnet_18_baseline import BaselineResNet
 from bcos.modules.bcosconv2d import BcosConv2d
 from bcos.modules.losses import BinaryCrossEntropyLoss
 from bcos.optim import LRSchedulerFactory
@@ -23,6 +24,7 @@ from functools import partial
 from jsonschema import validate, ValidationError
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
+from torchvision.models import resnet18
 from typing import Any
 
 import handle_output
@@ -269,7 +271,7 @@ def _process_run(
 
     ############## Defer task to the individual model(s). ##############
     if run["model"].lower() == "all":
-        MODELS = ["resent18"]
+        MODELS = ["resnet18_bcos", "resnet18_baseline"]
         all_model_results = {model: None for model in MODELS}
         for model_id, model in enumerate(MODELS):
             model_specific_run = copy.deepcopy(run)
@@ -356,7 +358,7 @@ def _process_model(
     ####################################################################
     logger.debug(f"Initialising the model ({run['model']})")
     models = {
-        "resnet18": (
+        "resnet18_bcos": (
             make_resnet18, {
                 "logger": logger,
                 "num_classes": dataset.get_n_classes(),
@@ -365,6 +367,10 @@ def _process_model(
                 "conv_layer": partial(BcosConv2d, b=2, max_out=2), # TODO: what is this and why is it 1?
             }
         ),
+        "resnet18_baseline": (
+            lambda **kwargs: BaselineResNet(kwargs["num_classes"]),
+            {"logger": logger, "num_classes": dataset.get_n_classes()}
+    )   
     }
     model = None
     for name, (cls, kwargs) in models.items():
