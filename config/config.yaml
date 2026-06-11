@@ -12,26 +12,45 @@ general:
     num_data_workers: 4 # Number of workers preparing batches, set to 0 if you get memory issues.
 jobs:
     job0:
-        ### Data ###
-        sample_rate: [22050] #TODO: The dataset has 16kHz sample rate, do we get better performance by upsampling?
-        stride: [2.95] # seconds
-        duration: [2.95] # seconds
+        sample_rate: [22050]
+        stride: [2.95]
+        duration: [2.95]
         n_fft: [1024]
         hop_length: [512]
         n_mels: [128]
         top_db: [80]
-        train_val_split: [.8, .2] # Only used if k_folds == 1
+        train_val_split: [0.8, 0.2]
         batch_size: [8]
-        ### Model ###
-        model: "all" # Can be from: [resnet18, all]
-        model_params: # Contents depend on the model used
+        model: "resnet18_bcos"
+        model_params:
             this_cant_be_empty_aparently: 69420
         optimiser: "adam"
         learning_rate: [0.0001]
         weight_decay: [0.0001]
         n_epochs: 20
-        k_folds: 1  # use 1 to ignore
-        ## Tune ###
+        k_folds: 1
+        tune: false
+        n_trials: 15
+        n_startup_trials: 5
+
+    job1:
+        sample_rate: [22050]
+        stride: [2.95]
+        duration: [2.95]
+        n_fft: [1024]
+        hop_length: [512]
+        n_mels: [128]
+        top_db: [80]
+        train_val_split: [0.8, 0.2]
+        batch_size: [8]
+        model: "resnet18_baseline"
+        model_params:
+            this_cant_be_empty_aparently: 69420
+        optimiser: "adam"
+        learning_rate: [0.0001]
+        weight_decay: [0.0001]
+        n_epochs: 20
+        k_folds: 1
         tune: false
         n_trials: 15
         n_startup_trials: 5
