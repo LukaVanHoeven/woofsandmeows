@@ -23,7 +23,7 @@ jobs:
         train_val_split: [.8, .2] # Only used if k_folds == 1
         batch_size: [8]
         ### Model ###
-        model: "resnet18" # Can be from: [resnet18, all]
+        model: "all" # Can be from: [resnet18, all]
         model_params: # Contents depend on the model used
             this_cant_be_empty_aparently: 69420
         optimiser: "adam"
