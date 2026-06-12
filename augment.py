@@ -57,6 +57,9 @@ class SpecAugment:
 
 
 class AudioAugment:
+    def __init__(self, sample_rate: int):
+        self.sample_rate = sample_rate
+
     def __call__(self, x: Tensor) -> Tensor:
         """
         Accepts:
@@ -83,13 +86,13 @@ class AudioAugment:
 
         # ---- augmentations ----
         if random.random() < 0.5:
-            x = time_shift(x)
+            x = self._time_shift(x)
 
         if random.random() < 0.5:
-            x = add_noise(x)
+            x = self._add_noise(x)
 
         if random.random() < 0.3:
-            x = time_stretch(x)
+            x = self._time_stretch(x)
 
         # ---- restore shape ----
         if len(original_shape) == 2:
@@ -97,36 +100,36 @@ class AudioAugment:
 
         return x
 
-def time_shift(audio: Tensor, shift_max: float = 0.2, sample_rate: int = 22050):
-    shift = int(random.uniform(-shift_max, shift_max) * sample_rate)
+    def _time_shift(self, audio: Tensor, shift_max: float = 0.2):
+        shift = int(random.uniform(-shift_max, shift_max) * self.sample_rate)
 
-    if shift == 0:
-        return audio
+        if shift == 0:
+            return audio
 
-    return torch.roll(audio, shifts=shift)
+        return torch.roll(audio, shifts=shift)
 
-def add_noise(audio: Tensor, noise_factor: float = 0.005):
-    return audio + noise_factor * torch.randn_like(audio)
+    def _add_noise(self, audio: Tensor, noise_factor: float = 0.005):
+        return audio + noise_factor * torch.randn_like(audio)
 
-def time_stretch(audio: Tensor, stretch_range=(0.9, 1.1)):
-    rate = random.uniform(*stretch_range)
+    def _time_stretch(self, audio: Tensor, stretch_range=(0.9, 1.1)):
+        rate = random.uniform(*stretch_range)
 
-    T = audio.shape[0]
-    new_T = max(1, int(T / rate))
+        T = audio.shape[0]
+        new_T = max(1, int(T / rate))
 
-    audio = audio.unsqueeze(0).unsqueeze(0)  # [1,1,T]
+        audio = audio.unsqueeze(0).unsqueeze(0)  # [1,1,T]
 
-    stretched = F.interpolate(
-        audio,
-        size=new_T,
-        mode="linear",
-        align_corners=False
-    ).squeeze()
+        stretched = F.interpolate(
+            audio,
+            size=new_T,
+            mode="linear",
+            align_corners=False
+        ).squeeze()
 
-    # crop / pad back to original length
-    if stretched.numel() > T:
-        stretched = stretched[:T]
-    else:
-        stretched = F.pad(stretched, (0, T - stretched.numel()))
+        # crop / pad back to original length
+        if stretched.numel() > T:
+            stretched = stretched[:T]
+        else:
+            stretched = F.pad(stretched, (0, T - stretched.numel()))
 
-    return stretched
+        return stretched
