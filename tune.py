@@ -29,7 +29,7 @@ TUNABLE_PARAMS = {
     "batch_size": ("int", False),
     "b": ("int", False),
     "learning_rate": ("float", True),
-    "weight_decay": ("int", True),
+    "weight_decay": ("float", True),
 }
 
 def _build_search_space(

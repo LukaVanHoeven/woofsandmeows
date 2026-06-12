@@ -38,6 +38,8 @@ modify this code, at the express notion that a disclaimer was put in.
             tune: _
             n_trials: _
             n_startup_trials: _
+            min_epochs: _
+            reduction_factor: _
     ```
 """
 
@@ -152,6 +154,15 @@ CONFIG_TEMPLATE = {
                         'n_startup_trials': {
                             'type': 'number', 
                         },
+                        'min_epochs': {
+                            'type': 'number',
+                            'minimum': 1
+                        },
+                        'reduction_factor': {
+                            'type': 'number',
+                            'minimum': 1
+                        },
+
                     },
                     'required': [
                         'sample_rate',

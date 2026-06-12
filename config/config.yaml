@@ -19,23 +19,25 @@ jobs:
         n_fft: [1024]
         hop_length: [512]
         n_mels: [128]
-        top_db: [80]
+        top_db: [60, 100]
         train_val_split: [0.8, 0.2]
-        batch_size: [8]
+        batch_size: [1, 8]
         ### model ####
         model: "resnet18_bcos"
         model_params:
             small_inputs: true
         optimiser: "adam"
-        b: [2]
-        learning_rate: [0.0001]
-        weight_decay: [0.0001]
+        b: [1,5]
+        learning_rate: [0.000001, 0.001]
+        weight_decay: [0.000001, 0.001]
         n_epochs: 50
         k_folds: 1
         ### hypertuning ####
-        tune: false
-        n_trials: 15
-        n_startup_trials: 5
+        tune: true
+        n_trials: 30
+        n_startup_trials: 6
+        min_epochs: 20
+        reduction_factor: 3
 
     # job1:
     #     sample_rate: [22050]
