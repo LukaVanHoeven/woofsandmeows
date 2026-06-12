@@ -2,6 +2,7 @@ import copy
 import logging
 import optuna
 import os
+import shutil
 import time
 import yaml
 
@@ -14,6 +15,8 @@ from typing import Any, Callable
 
 import handle_output
 
+from utils import _set_param, _get_param
+
 
 TUNABLE_PARAMS = {
     "sample_rate": ("int", False), # (type, log_scale)
@@ -24,6 +27,7 @@ TUNABLE_PARAMS = {
     "n_mels": ("int", False),
     "top_db": ("int", False),
     "batch_size": ("int", False),
+    "b": ("int", False),
     "learning_rate": ("float", True),
     "weight_decay": ("int", True),
 }
@@ -49,13 +53,12 @@ def _build_search_space(
     """
     params: dict[str, Any] = {}
     for key, (dtype, log) in TUNABLE_PARAMS.items():
-        values = job.get(key, [])
+        values = _get_param(job, key)
         n = len(values)
 
         if n == 0:
             raise ValueError(f"Job is missing required key '{key}'.")
         elif n == 1:
-            # Fixed – not a search dimension.
             params[key] = values[0]
         elif n == 2:
             low, high = values[0], values[1]
@@ -91,6 +94,11 @@ class OptunaPruningCallback:
         self.trial = trial
         self.monitor = monitor
         self._epoch = 0
+        self._losses: dict[int, list[float]] = {}
+
+    def next_fold(self) -> None:
+        """Reset the epoch counter for the next fold."""
+        self._epoch = 0
 
     def __call__(self, val_loss: float)-> None:
         """
@@ -100,12 +108,18 @@ class OptunaPruningCallback:
         :param val_loss: Validation loss of the current epoch.
         :type val_loss: float.
         """
-        self.trial.report(val_loss, step=self._epoch)
+        epoch = self._epoch
+        self._losses.setdefault(epoch, []).append(val_loss)
+
+        avg = sum(self._losses[epoch]) / len(self._losses[epoch])
+        self.trial.report(avg, step=epoch)
         self._epoch += 1
+
         if self.trial.should_prune():
+            n_folds_seen = len(self._losses[epoch])
             raise optuna.TrialPruned(
-                f"Trial pruned at epoch {self._epoch - 1} "
-                f"(val_{self.monitor}={val_loss:.4f})."
+                f"Trial pruned at fold {n_folds_seen}, epoch {epoch} "
+                f"(avg val_{self.monitor}={avg:.4f})."
             )
 
 def tune_job(
@@ -164,9 +178,9 @@ def tune_job(
     )
     
     pruner = HyperbandPruner(
-        min_resource=1,
+        min_resource=job["min_epochs"],
         max_resource=job["n_epochs"],
-        reduction_factor=3,
+        reduction_factor=job["reduction_factor"],
     )
 
     study = optuna.create_study(
@@ -210,13 +224,15 @@ def tune_job(
         sampled = _build_search_space(trial, job)
 
         run = copy.deepcopy(job)
-        run.update(sampled)
+        for key, value in sampled.items():
+            _set_param(run, key, value)
 
         logger.info(f"Trial {trial.number} | params: {sampled}")
 
         try:
             score = build_run_fn(run, trial.number, logger, trial)
         except optuna.TrialPruned:
+            logger.info(f"Trial {trial.number} was pruned.")
             _log_progress_bar(trial.number, n_trials, start_time, logger)
             raise
         except Exception as e:
@@ -244,11 +260,51 @@ def tune_job(
         f"params={study.best_trial.params}"
     )
 
-    _save_study_summary(study, tuning_output_dir, logger)
+    _save_study_summary(study, job, tuning_output_dir, logger)
     return study
+
+def _format_job_yaml(job: dict[str, Any]) -> str:
+    """
+    Format a job dict as a human-readable YAML string that mirrors the
+    structure of the original config file, with section comments and
+    proper indentation.
+    """
+    def _val(v):
+        """Format a value: lists stay as [x], strings get quoted, rest as-is."""
+        if isinstance(v, list):
+            return f"[{', '.join(str(i) for i in v)}]"
+        if isinstance(v, str):
+            return f'"{v}"'
+        return str(v).lower() if isinstance(v, bool) else str(v)
+
+    lines = ["jobs:", "    job0:"]
+
+    section_comments = {
+        "dataset":       "        ### Data ###",
+        "model":         "        ### Model ###",
+        "optimiser":     "        ### Training ###",
+        "tune":          "        ### Tune ###",
+    }
+
+    skip_keys = {"model_params"}
+
+    for key, value in job.items():
+        if key in skip_keys:
+            continue
+        if key in section_comments:
+            lines.append(section_comments[key])
+        lines.append(f"        {key}: {_val(value)}")
+        # Emit model_params block right after 'model'
+        if key == "model" and "model_params" in job:
+            lines.append("        model_params:")
+            for pk, pv in job["model_params"].items():
+                lines.append(f"            {pk}: {_val(pv)}")
+
+    return "\n".join(lines) + "\n"
 
 def _save_study_summary(
     study: optuna.Study,
+    job: dict[str, Any],
     output_dir: str,
     logger: logging.Logger,
 )-> None:
@@ -259,6 +315,8 @@ def _save_study_summary(
 
     :param study: The hyperparameter optimization study.
     :type study: optuna.Study
+    :param job: Job description, pulled from config.
+    :type job: ditct[str, Any]
     :param output_dir: Output directory to save files to.
     :type output_dir: str
     :param logger: Logger to log to.
@@ -280,6 +338,23 @@ def _save_study_summary(
             f,
         )
     logger.info(f"Best params saved to {best_path}")
+
+    best_trial_dir = f"{output_dir}trial_{study.best_trial.number}/"
+    best_model_dir = os.path.join(output_dir, "best_model")
+    if os.path.exists(best_trial_dir):
+        shutil.copytree(best_trial_dir, best_model_dir, dirs_exist_ok=True)
+        logger.info(f"Best trial folder copied to {best_model_dir}")
+    else:
+        logger.warning(f"Best trial folder not found: {best_trial_dir}")
+
+    run_config = copy.deepcopy(job)
+    for key, value in study.best_trial.params.items():
+        _set_param(run_config, key, [value])
+
+    config_path = os.path.join(best_model_dir, "run_config.yml")
+    with open(config_path, "w") as f:
+        f.write(_format_job_yaml(run_config))
+    logger.info(f"Run config saved to {config_path}")
     
     param_cols = [
         f"params_{key}"

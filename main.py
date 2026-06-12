@@ -13,9 +13,8 @@ import shutil
 import torch
 import traceback
 import yaml
-import optuna
 
-from resnet_18 import make_resnet18
+from resnet_bcos import make_resnet18, make_resnet34, make_resnet50
 from resnet_18_baseline import BaselineResNet
 from bcos.modules.bcosconv2d import BcosConv2d
 from bcos.modules.losses import BinaryCrossEntropyLoss
@@ -29,7 +28,8 @@ from typing import Any
 
 import handle_output
 
-from audio_dataset import CatDogAudioDataset, LABEL_MAP
+# from dog_cat_audio_dataset import CatDogAudioDataset, LABEL_MAP
+from esc_audio_dataset import ESCAudioDataset, LABEL_MAP
 from create_logger import create_logger
 from config.config_validation_template import CONFIG_TEMPLATE
 from data import to_dataloaders
@@ -41,14 +41,10 @@ from visualise import \
     plot_confusion_matrix
 
 DATASET_MAPPING = {
-    "train": [
-        "data/cats_dogs/train/cat/",
-        "data/cats_dogs/train/dog/",
-    ],
-    "test": [
-        "data/cats_dogs/test/cats/",
-        "data/cats_dogs/test/test/", # dogs
-    ]
+    "dirs": ["data/ESC-50-master/audio/"],
+    "csv_path": "data/ESC-50-master/meta/esc50.csv",
+    "train_folds": [1, 2, 3, 4],
+    "test_folds": [5]
 }
 
 
@@ -193,8 +189,10 @@ def _process_run(
     ####################################################################
     #                          Load the data.                          #
     ####################################################################
-    dataset = CatDogAudioDataset(
-        data_dirs=DATASET_MAPPING["train"],
+    dataset = ESCAudioDataset(
+        data_dirs=DATASET_MAPPING["dirs"],
+        folds=DATASET_MAPPING["train_folds"],
+        csv_path=DATASET_MAPPING["csv_path"],
         target_sr=run["sample_rate"],
         duration=run["duration"],
         n_fft=run["n_fft"],
@@ -205,8 +203,10 @@ def _process_run(
     logger.debug(f"Dataset size: {len(dataset)}")
     logger.debug(f"Shape of first x element: {dataset[0][0].shape}")
     logger.debug(f"First y element: {dataset[0][1]}")
-    test_data = CatDogAudioDataset(
-        data_dirs=DATASET_MAPPING["test"],
+    test_data = ESCAudioDataset(
+        data_dirs=DATASET_MAPPING["dirs"],
+        folds=DATASET_MAPPING["test_folds"],
+        csv_path=DATASET_MAPPING["csv_path"],
         target_sr=run["sample_rate"],
         duration=run["duration"],
         n_fft=run["n_fft"],
@@ -257,7 +257,7 @@ def _process_run(
             logger=logger,
             num_workers=CONFIG["general"]["num_data_workers"],
             pin_memory=True, # TODO: check if this should be replaced with run["lazy"]
-            persistent_workers=True
+            persistent_workers=True if CONFIG["general"]["num_data_workers"] > 0 else False,
         )
 
     test_dataloader = to_dataloaders(
@@ -271,7 +271,12 @@ def _process_run(
 
     ############## Defer task to the individual model(s). ##############
     if run["model"].lower() == "all":
-        MODELS = ["resnet18_bcos", "resnet18_baseline"]
+        MODELS = [
+            "resnet18_bcos", 
+            "resnet34_bcos", 
+            "resnet50_bcos", 
+            "resnet18_baseline"
+        ]
         all_model_results = {model: None for model in MODELS}
         for model_id, model in enumerate(MODELS):
             model_specific_run = copy.deepcopy(run)
@@ -307,7 +312,7 @@ def _process_run(
 def _process_model(
     run: dict[str, Any], 
     model_id: int | None, 
-    dataset: CatDogAudioDataset,
+    dataset: ESCAudioDataset,
     train_dataloader: DataLoader[Any] | None, 
     val_dataloader: DataLoader[Any] | None,
     test_dataloader: DataLoader[Any],
@@ -362,15 +367,33 @@ def _process_model(
             make_resnet18, {
                 "logger": logger,
                 "num_classes": dataset.get_n_classes(),
-                "in_chans" : 1, # TODO: what is this and why is it?
-                "small_inputs": True, # TODO: what is this and why is it?
-                "conv_layer": partial(BcosConv2d, b=2, max_out=2), # TODO: what is this and why is it 1?
+                "in_chans" : 1,
+                "small_inputs": run["model_params"].get("small_inputs", True),
+                "conv_layer": partial(BcosConv2d, b=run["b"], max_out=2),
+            }
+        ),
+        "resnet34_bcos": (
+            make_resnet34, {
+                "logger": logger,
+                "num_classes": dataset.get_n_classes(),
+                "in_chans" : 1,
+                "small_inputs": run["model_params"].get("small_inputs", True),
+                "conv_layer": partial(BcosConv2d, b=run["b"], max_out=2),
+            }
+        ),
+        "resnet50_bcos": (
+            make_resnet50, {
+                "logger": logger,
+                "num_classes": dataset.get_n_classes(),
+                "in_chans" : 1,
+                "small_inputs": run["model_params"].get("small_inputs", True),
+                "conv_layer": partial(BcosConv2d, b=run["b"], max_out=2),
             }
         ),
         "resnet18_baseline": (
             lambda **kwargs: BaselineResNet(kwargs["num_classes"]),
             {"logger": logger, "num_classes": dataset.get_n_classes()}
-    )   
+        )   
     }
     model = None
     for name, (cls, kwargs) in models.items():
@@ -449,7 +472,7 @@ def _process_model(
                     logger=logger,
                     num_workers=CONFIG["general"]["num_data_workers"],
                     pin_memory=True,
-                    persistent_workers=True,
+                    persistent_workers=True if CONFIG["general"]["num_data_workers"] > 0 else False,
                 ),
                 **arguments
             )
@@ -486,6 +509,22 @@ def _process_model(
         f"validation accuracy: {max(val_metrics["accuracy"])}, achieved during"
         f" epoch {np.argmax(val_metrics["accuracy"]) + 1}."
     )
+
+    best_epoch = np.argmax(val_metrics["accuracy"])
+    Stats = (
+        f"Stats from best validation epoch (epoch={best_epoch + 1}):\nTrain: "
+        f"{format_result(train_metrics, best_epoch, train_metrics_std)} | "
+        f"Val: {format_result(val_metrics, best_epoch, val_metrics_std)}"
+    )
+
+    logger.critical(Stats)
+
+    metrics_path = os.path.join(
+        handle_output.OUTPUT_DIR,
+        "metrics_training.md"
+    )
+    with open(metrics_path, "w", encoding="utf-8") as f:
+        f.write(Stats)
 
     ################# Plot the predicted and real values ###############
     visualise_training(

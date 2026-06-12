@@ -9,48 +9,52 @@
 # parameter restrictions.
 
 general:
-    num_data_workers: 4 # Number of workers preparing batches, set to 0 if you get memory issues.
+    num_data_workers: 2 # Number of workers preparing batches, set to 0 if you get memory issues.
 jobs:
     job0:
+        ### data ####
         sample_rate: [22050]
-        stride: [2.95]
-        duration: [2.95]
+        stride: [5]
+        duration: [5]
         n_fft: [1024]
         hop_length: [512]
         n_mels: [128]
         top_db: [80]
         train_val_split: [0.8, 0.2]
         batch_size: [8]
-        model: "resnet18_bcos"
+        ### model ####
+        model: "resnet34_bcos"
         model_params:
-            this_cant_be_empty_aparently: 69420
+            small_inputs: true
         optimiser: "adam"
+        b: [2]
         learning_rate: [0.0001]
         weight_decay: [0.0001]
         n_epochs: 20
         k_folds: 1
+        ### hypertuning ####
         tune: false
         n_trials: 15
         n_startup_trials: 5
 
-    job1:
-        sample_rate: [22050]
-        stride: [2.95]
-        duration: [2.95]
-        n_fft: [1024]
-        hop_length: [512]
-        n_mels: [128]
-        top_db: [80]
-        train_val_split: [0.8, 0.2]
-        batch_size: [8]
-        model: "resnet18_baseline"
-        model_params:
-            this_cant_be_empty_aparently: 69420
-        optimiser: "adam"
-        learning_rate: [0.0001]
-        weight_decay: [0.0001]
-        n_epochs: 20
-        k_folds: 1
-        tune: false
-        n_trials: 15
-        n_startup_trials: 5
+    # job1:
+    #     sample_rate: [22050]
+    #     stride: [2.95]
+    #     duration: [2.95]
+    #     n_fft: [1024]
+    #     hop_length: [512]
+    #     n_mels: [128]
+    #     top_db: [80]
+    #     train_val_split: [0.8, 0.2]
+    #     batch_size: [8]
+    #     model: "resnet18_baseline"
+    #     model_params:
+    #         this_cant_be_empty_aparently: 69420
+    #     optimiser: "adam"
+    #     learning_rate: [0.0001]
+    #     weight_decay: [0.0001]
+    #     n_epochs: 20
+    #     k_folds: 1
+    #     tune: false
+    #     n_trials: 15
+    #     n_startup_trials: 5

@@ -2,6 +2,8 @@
 
 Download the data yourself and place it in this directory.
 
+## Dog & Cat data
+
 Data can be downloaded [here](https://www.kaggle.com/datasets/mmoreaux/audio-cats-and-dogs?resource=download).
 
 The directory should look like this after downloading:
@@ -20,4 +22,14 @@ data/
   |- utils.py
 ```
 
-Note that we make our own train and test split, so the `test/` and `train/` folders can be disregarded.
+## ESC-10 data
+
+Data can be downloaded [here](https://github.com/karolpiczak/ESC-50#:~:text=replication%20data.-,Download,-The%20dataset%20can).
+
+The directory should look like this after downloading:
+```
+data/
+  |- ESC-50-master/
+  |    |- ...
+  |- README.md
+```

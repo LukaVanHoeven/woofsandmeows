@@ -29,6 +29,7 @@ modify this code, at the express notion that a disclaimer was put in.
             model: _
             model_params: _
             optimiser: _
+            b: _
             learning_rate: _
             weight_decay: _
             n_epochs: _
@@ -48,7 +49,7 @@ CONFIG_TEMPLATE = {
             'properties': {
                 'num_data_workers': {
                     'type': 'number',
-                    'minimum': 1
+                    'minimum': 0
                 },
             },
             'required': [
@@ -118,6 +119,11 @@ CONFIG_TEMPLATE = {
                         'optimiser': {
                             'type': 'string', 
                         },
+                        'b': {
+                            'type': 'array',
+                            'items': {'type': 'number'},
+                            'minItems': 1
+                        },
                         'learning_rate': {
                             'type': 'array',
                             'items': {'type': 'number'},
@@ -161,6 +167,7 @@ CONFIG_TEMPLATE = {
                         'model',
                         'model_params',
                         'optimiser',
+                        'b',
                         'learning_rate',
                         'weight_decay',
                         'n_epochs',
