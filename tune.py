@@ -27,7 +27,8 @@ TUNABLE_PARAMS = {
     "n_mels": ("int", False),
     "top_db": ("int", False),
     "batch_size": ("int", False),
-    "b": ("int", False),
+    "small_inputs": ("int", False),
+    "b": ("float", False),
     "learning_rate": ("float", True),
     "weight_decay": ("float", True),
 }

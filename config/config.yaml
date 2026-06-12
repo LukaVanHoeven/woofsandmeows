@@ -25,21 +25,17 @@ jobs:
         ### model ####
         model: "resnet18_bcos"
         model_params:
-            small_inputs: true
+            small_inputs: [0,1]
         optimiser: "adam"
-        b: [1,5]
+        b: [2,5]
         learning_rate: [0.000001, 0.001]
         weight_decay: [0.000001, 0.001]
-        n_epochs: 75
-        b: [2]
-        learning_rate: [0.0001]
-        weight_decay: [0.0001]
-        n_epochs: 75
+        n_epochs: 50
         k_folds: 1
         ### hypertuning ####
         tune: true
         n_trials: 30
-        n_startup_trials: 6
+        n_startup_trials: 7
         min_epochs: 20
         reduction_factor: 3
 
