@@ -64,9 +64,7 @@ import torchaudio
 import torch
 from torch import Tensor
 from torch.utils.data import Dataset
- 
 import soundfile as sf
- 
  
 # ESC-10 categories mapped to sequential class indices 0-9, ordered by
 # their original ESC-50 target number (dog=0, rooster=1, …, chainsaw=41).
@@ -208,7 +206,8 @@ class ESCAudioDataset(Dataset):
         hop_length: int = 256,
         n_mels: int = 80,
         top_db: float = 80.0,
-        transform: Optional[Callable[[Tensor], Tensor]] = None,
+        post_transform: Optional[Callable[[Tensor], Tensor]] = None,
+        pre_transform: Optional[Callable[[Tensor], Tensor]] = None,
         target_transform: Optional[Callable[[int], int]] = None,
     ) -> None:
         super().__init__()
@@ -238,7 +237,8 @@ class ESCAudioDataset(Dataset):
         self.n_mels = n_mels
         self.top_db = top_db
  
-        self.transform = transform
+        self.pre_transform = pre_transform
+        self.post_transform = post_transform
         self.target_transform = target_transform
  
         self._mel_transform = torchaudio.transforms.MelSpectrogram(
@@ -357,13 +357,17 @@ class ESCAudioDataset(Dataset):
             Class index: ``0`` for *cat*, ``1`` for *dog*.
         """
         waveform = self.load_waveform(idx)
-        spectrogram = self._to_db(self._mel_transform(waveform))
 
-        if self.transform is not None:
-            spectrogram = self.transform(spectrogram)
+        if self.pre_transform is not None:
+            waveform = self.pre_transform(waveform)
+
+        spectrogram = self._to_db(self._mel_transform(waveform))
 
         if self.mean is not None and self.std is not None:
             spectrogram = (spectrogram - self.mean) / self.std
+
+        if self.post_transform is not None:
+            spectrogram = self.post_transform(spectrogram)
 
         # AddInverse
         # spectrogram = torch.cat(
@@ -410,9 +414,9 @@ class ESCAudioDataset(Dataset):
         values: list[np.ndarray] = []
         for i in indices:
             waveform = self.load_waveform(i)
+            if self.pre_transform is not None:
+                waveform = self.pre_transform(waveform)
             spec = self._to_db(self._mel_transform(waveform))
-            if self.transform is not None: #TODO: added this if statement to ensure normalisation is post-augmentation, is this right?
-                spec = self.transform(spec)
             values.append(spec.numpy().ravel())
 
         all_values = np.concatenate(values)

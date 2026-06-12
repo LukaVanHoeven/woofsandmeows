@@ -296,6 +296,8 @@ def train_epoch(
     :return: Average training loss and metrics over the epoch.
     :rtype: tuple[float, dict[str, float]]
     """
+    scaler = torch.amp.GradScaler(device)
+
     total_loss = 0
     train_metrics = {metric: [] for metric in METRICS}
     log_points = set(
@@ -304,15 +306,21 @@ def train_epoch(
 
     model.train()
     for batch, (X, y) in enumerate(dataloader):
-        X = X.to(device)
-        y = y.to(device)
+        X = X.to(device, non_blocking=True)
+        y = y.to(device, non_blocking=True)
 
-        optimiser.zero_grad()
-        y_hat = model(X).squeeze(-1)
-        loss = loss_fn(y_hat, y)
+        optimiser.zero_grad(set_to_none=True)
 
-        loss.backward()
-        optimiser.step()
+        with torch.autocast(
+            device_type=device,
+            dtype=torch.bfloat16
+        ):
+            y_hat = model(X).squeeze(-1)
+            loss = loss_fn(y_hat, y)
+
+        scaler.scale(loss).backward()
+        scaler.step(optimiser)
+        scaler.update()
 
         total_loss += loss.item()
         for metric, method in METRICS.items():
@@ -366,8 +374,12 @@ def val_epoch(
         for X, y in dataloader:
             X = X.to(device)
             y = y.to(device)
-            y_hat = model(X).squeeze(-1)
-            loss = loss_fn(y_hat, y)
+            with torch.autocast(
+                device_type=device,
+                dtype=torch.bfloat16
+            ):
+                y_hat = model(X).squeeze(-1)
+                loss = loss_fn(y_hat, y)
 
             total_loss += loss.item()
             for metric, method in METRICS.items():
@@ -412,7 +424,11 @@ def evaluate(
     with torch.no_grad():
         for x, y in tqdm(dataloader, desc="Evaluating batches"):
             x = x.to(device)
-            y_hat = model(x).squeeze(-1)
+            with torch.autocast(
+                device_type=device,
+                dtype=torch.bfloat16
+            ):
+                y_hat = model(x).squeeze(-1)
 
             targets.append(y.cpu())
             predictions.append(y_hat.cpu())

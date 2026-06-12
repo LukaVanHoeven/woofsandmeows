@@ -36,6 +36,7 @@ from data import to_dataloaders
 from train import train_cross_validation, train, evaluate, METRICS
 from utils import format_result
 from tune import tune_job, OptunaPruningCallback, TUNABLE_PARAMS
+from augment import SpecAugment, AudioAugment
 from visualise import \
     visualise_training, \
     visualise_tuning, \
@@ -200,6 +201,8 @@ def _process_run(
         hop_length=run["hop_length"],
         n_mels=run["n_mels"],
         top_db=run["top_db"],
+        pre_transform=AudioAugment(),
+        post_transform=SpecAugment()
     )
     logger.debug(f"Dataset size: {len(dataset)}")
     logger.debug(f"Shape of first x element: {dataset[0][0].shape}")
@@ -213,7 +216,7 @@ def _process_run(
         n_fft=run["n_fft"],
         hop_length=run["hop_length"],
         n_mels=run["n_mels"],
-        top_db=run["top_db"],
+        top_db=run["top_db"]
     )
     logger.debug(f"Test dataset size: {len(test_data)}")
 
