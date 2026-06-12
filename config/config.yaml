@@ -23,14 +23,14 @@ jobs:
         train_val_split: [0.8, 0.2]
         batch_size: [8]
         ### model ####
-        model: "resnet34_bcos"
+        model: "resnet18_bcos"
         model_params:
             small_inputs: true
         optimiser: "adam"
         b: [2]
         learning_rate: [0.0001]
         weight_decay: [0.0001]
-        n_epochs: 20
+        n_epochs: 50
         k_folds: 1
         ### hypertuning ####
         tune: false

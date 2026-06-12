@@ -34,6 +34,7 @@ from create_logger import create_logger
 from config.config_validation_template import CONFIG_TEMPLATE
 from data import to_dataloaders
 from train import train_cross_validation, train, evaluate, METRICS
+from utils import format_result
 from tune import tune_job, OptunaPruningCallback, TUNABLE_PARAMS
 from visualise import \
     visualise_training, \

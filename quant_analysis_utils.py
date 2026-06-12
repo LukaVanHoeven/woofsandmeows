@@ -1,13 +1,108 @@
 import logging
 import torch
+import matplotlib.pyplot as plt
 
 from collections import defaultdict
 import numpy as np
 from torch import nn
 from tqdm import tqdm
 
-from esc_audio_dataset import ESCAudioDataset, 
+from esc_audio_dataset import ESCAudioDataset, REVERSE_LABEL_MAP
 
+
+def _save_grid_explanation(
+    x_base: torch.Tensor,
+    contrib_map: torch.Tensor,
+    cls_idx: int,
+    n_classes: int,
+    T: int,
+    output_path: str,
+) -> None:
+    """
+    Save a two-panel figure for a single grid pointing game explanation.
+ 
+    Top panel    – log-mel spectrogram (all classes concatenated).
+    Bottom panel – signed contribution map from model.explain(), with
+                   positive contributions in red and negative in blue.
+ 
+    Both panels share the same column layout:
+      • Dashed white vertical lines separate each class column.
+      • Each column is labelled with its class name on the x-axis.
+      • The column being explained is highlighted with a gold border,
+        a faint gold fill, and a bold gold x-axis label.
+ 
+    Parameters
+    ----------
+    x_base      : (1, n_mels, n_classes * T)  — concatenated spectrogram.
+    contrib_map : (n_mels, n_classes * T)      — signed contribution map.
+    cls_idx     : index of the class being explained (0-indexed).
+    n_classes   : total number of classes.
+    T           : time-frame width of one class column.
+    output_path : file path to write the PNG to.
+    """
+    n_mels: int = x_base.shape[-2]
+    spec = x_base.squeeze(0).cpu().numpy()
+    cmap_data = contrib_map.cpu().numpy()
+ 
+    fig, axes = plt.subplots(
+        nrows=2, ncols=1,
+        figsize=(max(12, n_classes * 2), 6),
+        constrained_layout=True,
+    )
+ 
+    # --- top: raw log-mel spectrogram ----------------------------------
+    axes[0].imshow(spec, origin="lower", aspect="auto")
+    axes[0].set_ylabel("Mel bin")
+ 
+    # --- bottom: signed contribution map (red = positive, blue = negative)
+    axes[1].imshow(cmap_data, origin="lower", aspect="auto", cmap="RdBu_r")
+    axes[1].set_ylabel("Mel bin")
+    axes[1].set_xlabel("Time frame")
+ 
+    # --- per-column annotations (same for both panels) -----------------
+    tick_positions = [int((c + 0.5) * T) for c in range(n_classes)]
+    tick_labels    = [REVERSE_LABEL_MAP[c] for c in range(n_classes)]
+ 
+    for ax in axes:
+        for c in range(n_classes):
+            # Dashed vertical separator between columns
+            if c > 0:
+                ax.axvline(
+                    x=c * T - 0.5,
+                    color="white", linewidth=1.2, linestyle="--", alpha=0.7,
+                    zorder=3,
+                )
+ 
+            # Gold highlight on the predicted class column
+            if c == cls_idx:
+                ax.add_patch(plt.Rectangle(
+                    xy=(c * T - 0.5, -0.5),
+                    width=T,
+                    height=n_mels,
+                    linewidth=2,
+                    edgecolor="#FFD700",
+                    facecolor="#FFD700",
+                    alpha=0.12,
+                    zorder=2,
+                ))
+ 
+        # Class-name tick labels centred in each column
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels, rotation=30, ha="right", fontsize=8)
+ 
+        # Make the predicted class label gold and bold
+        for i, tick in enumerate(ax.get_xticklabels()):
+            if i == cls_idx:
+                tick.set_color("#FFD700")
+                tick.set_fontweight("bold")
+ 
+    axes[0].set_title(
+        f"Grid pointing game — explaining: {REVERSE_LABEL_MAP[cls_idx]}",
+        pad=6,
+    )
+ 
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close()
 
 def grid_pointing_game(
     dataset: ESCAudioDataset, 
@@ -92,10 +187,14 @@ def grid_pointing_game(
             total_positive: int = int(positive.sum().item())
 
             if r == 0 and first_img_output_dir is not None:
-                plt.imshow(positive, origin="lower")
-                plt.title(f"Explain for {cls_idx}")
-                plt.colorbar()
-                plt.show()
+                _save_grid_explanation(
+                    x_base=x_base,
+                    contrib_map=contrib_map,
+                    cls_idx=cls_idx,
+                    n_classes=n_classes,
+                    T=T,
+                    output_path=f"{first_img_output_dir}/expl_cls_{REVERSE_LABEL_MAP[cls_idx]}.png",
+                )
 
             if total_positive == 0:
                 logger.warning("One of the explanations did not contain any positive contributions.")
