@@ -21,8 +21,8 @@ def _save_grid_explanation(
     """
     Save a two-panel figure for a single grid pointing game explanation.
  
-    Top panel    – log-mel spectrogram (all classes concatenated).
-    Bottom panel – signed contribution map from model.explain(), with
+    Top panel    - log-mel spectrogram (all classes concatenated).
+    Bottom panel - signed contribution map from model.explain(), with
                    positive contributions in red and negative in blue.
  
     Both panels share the same column layout:
@@ -110,7 +110,7 @@ def grid_pointing_game(
     DEVICE: str,
     logger: logging.Logger,
     first_img_output_dir: str | None=None
-)-> np.ndarray:
+)-> tuple[np.ndarray, np.ndarray]:
     """
     Evaluates a B-cos model on the ESC-10 dataset using the grid pointing game
     (Boehle et al., 2022 — https://arxiv.org/abs/2205.10268).
@@ -152,6 +152,7 @@ def grid_pointing_game(
     logger.debug(f"Rounds : {n_rounds} ({n_classes * n_rounds} explain calls total)")
 
     pointing_scores: list[float] = []
+    weighted_pointing_scores: list[float] = []
 
     model.eval()
 
@@ -183,13 +184,16 @@ def grid_pointing_game(
                 expl_out["contribution_map"].detach().squeeze(0).squeeze(0).cpu()
             )
 
-            positive: torch.Tensor = contrib_map > 0 # (n_mels, n_classes*T)
+            positive: torch.Tensor = contrib_map > 0
             total_positive: int = int(positive.sum().item())
+
+            positive_contrib = contrib_map.clamp(min=0)
+            total_positive_weight = positive_contrib.sum().item()
 
             if r == 0 and first_img_output_dir is not None:
                 _save_grid_explanation(
                     x_base=x_base,
-                    contrib_map=contrib_map,
+                    contrib_map=positive_contrib,
                     cls_idx=cls_idx,
                     n_classes=n_classes,
                     T=T,
@@ -207,4 +211,269 @@ def grid_pointing_game(
             in_correct: int = int((positive & correct_col).sum().item())
             pointing_scores.append(in_correct / total_positive)
 
-    return np.array(pointing_scores)
+            correct_positive_weight = positive_contrib[correct_col].sum().item()
+            weighted_pointing_scores.append(correct_positive_weight / total_positive_weight)
+
+    return np.array(pointing_scores), np.array(weighted_pointing_scores)
+
+def positive_contribution_masking_accuracy(
+    dataset: ESCAudioDataset,
+    model: nn.Module,
+    DEVICE: str,
+    logger: logging.Logger,
+    first_img_output_dir: str | None
+) -> tuple[float, float, float]:
+    """
+    Evaluates how well the positive contribution regions identified by a B-cos
+    explanation preserve predictive performance.
+
+    Protocol
+    --------
+    For every sample in the dataset:
+
+    1. Run the original image through the model and obtain:
+        - predicted class
+        - contribution map for the predicted class
+
+    2. Record whether the original prediction matches the ground-truth label.
+
+    3. Construct a binary mask from the contribution map:
+            mask = contribution_map > 0
+
+    4. Apply the mask to the original image:
+            masked_image = image * mask
+
+       so that only positively contributing pixels remain.
+
+    5. Run the masked image through the model again.
+
+    6. Record whether the masked-image prediction matches the ground-truth
+       label.
+
+    At the end, return the classification accuracy before and after masking.
+
+    Interpretation
+    --------------
+    - Original accuracy measures normal model performance.
+    - Masked accuracy measures whether the positive contribution regions alone
+      contain sufficient information for correct classification.
+
+    Parameters
+    ----------
+    dataset:
+        Dataset containing spectrograms and labels.
+
+    model:
+        B-cos model implementing:
+            - forward(x)
+            - explain(x, idx)
+
+        where explain(...) returns a dictionary containing
+        "contribution_map".
+
+    DEVICE:
+        Torch device string.
+
+    logger:
+        Logger instance.
+
+    Returns
+    -------
+    tuple[float, float]
+        (
+            original_accuracy,
+            positive_masked_accuracy,
+            negative_masked_accuracy,
+        )
+    """
+    model.eval()
+
+    n_samples = len(dataset)
+
+    correct_original = 0
+    correct_positive_masked = 0
+    correct_negative_masked = 0
+
+    for idx in tqdm(range(n_samples), desc="Evaluating masks"):
+        img, label = dataset[idx]
+        x = img.unsqueeze(0).to(DEVICE)
+
+        x_expl = x.detach().clone().requires_grad_(True)
+        with torch.enable_grad():
+            expl_out = model.explain(x_expl)
+
+        if expl_out["explained_class_idx"] == label:
+            correct_original += 1
+
+        contrib_map = (
+            expl_out["contribution_map"].detach().squeeze(0).squeeze(0)
+        )
+
+        # positive mask
+        positive_mask = contrib_map > 0
+        masked_img = img.clone().to(DEVICE)
+        masked_img *= positive_mask.unsqueeze(0).to(masked_img.dtype)
+
+        x_masked = masked_img.unsqueeze(0).to(DEVICE)
+
+        if idx == 0:
+            plt.imshow(x_masked.squeeze(0).squeeze(0).detach().cpu(), origin="lower")
+            plt.title(f"Positive masked image for class: {REVERSE_LABEL_MAP[label]} | prediction: {REVERSE_LABEL_MAP[expl_out["explained_class_idx"]]}")
+            plt.colorbar()
+            plt.savefig(f"{first_img_output_dir}/positive_masked.png")
+            plt.close()
+            
+            plt.imshow(img.squeeze(0).cpu(), origin="lower")
+            plt.title(f"Original image for class: {REVERSE_LABEL_MAP[label]} | prediction: {REVERSE_LABEL_MAP[expl_out["explained_class_idx"]]}")
+            plt.colorbar()
+            plt.savefig(f"{first_img_output_dir}/original_image.png")
+            plt.close()
+
+            plt.imshow(contrib_map.cpu(), origin="lower", cmap="bwr")
+            plt.title(f"Contribution map for class: {REVERSE_LABEL_MAP[label]} | prediction: {REVERSE_LABEL_MAP[expl_out["explained_class_idx"]]}")
+            plt.colorbar()
+            plt.savefig(f"{first_img_output_dir}/contribution_map.png")
+            plt.close()
+
+        with torch.no_grad():
+            masked_logits = model(x_masked)
+
+        masked_pred = int(masked_logits.argmax(dim=1).item())
+
+        if masked_pred == label:
+            correct_positive_masked += 1
+        
+        # negative mask
+        negative_mask = contrib_map <= 0
+        masked_img = img.clone().to(DEVICE)
+        masked_img *= negative_mask.unsqueeze(0).to(masked_img.dtype)
+
+        x_masked = masked_img.unsqueeze(0).to(DEVICE)
+        if idx == 0:
+            plt.imshow(x_masked.squeeze(0).squeeze(0).detach().cpu(), origin="lower")
+            plt.title(f"Negative masked image for class: {REVERSE_LABEL_MAP[label]} | prediction: {REVERSE_LABEL_MAP[expl_out["explained_class_idx"]]}")
+            plt.colorbar()
+            plt.savefig(f"{first_img_output_dir}/negative_masked.png")
+            plt.close()
+
+        with torch.no_grad():
+            masked_logits = model(x_masked)
+
+        masked_pred = int(masked_logits.argmax(dim=1).item())
+
+        if masked_pred == label:
+            correct_negative_masked += 1
+
+    original_accuracy = correct_original / n_samples
+    positive_masked_accuracy = correct_positive_masked / n_samples
+    negative_masked_accuracy = correct_negative_masked / n_samples
+
+    return original_accuracy, positive_masked_accuracy, negative_masked_accuracy
+
+# def positive_contribution_masking_accuracy(
+#     dataset: ESCAudioDataset,
+#     model: nn.Module,
+#     DEVICE: str,
+#     logger: logging.Logger,
+# ) -> tuple[float, float]:
+#     """
+#     Evaluates how well the positive contribution regions identified by a B-cos
+#     explanation preserve predictive performance.
+
+#     Protocol
+#     --------
+#     For every sample in the dataset:
+
+#     1. Run the original image through the model and obtain:
+#         - predicted class
+#         - contribution map for the predicted class
+
+#     2. Record whether the original prediction matches the ground-truth label.
+
+#     3. Construct a binary mask from the contribution map:
+#             mask = contribution_map > 0
+
+#     4. Apply the mask to the original image:
+#             masked_image = image * mask
+
+#        so that only positively contributing pixels remain.
+
+#     5. Run the masked image through the model again.
+
+#     6. Record whether the masked-image prediction matches the ground-truth
+#        label.
+
+#     At the end, return the classification accuracy before and after masking.
+
+#     Interpretation
+#     --------------
+#     - Original accuracy measures normal model performance.
+#     - Masked accuracy measures whether the positive contribution regions alone
+#       contain sufficient information for correct classification.
+
+#     Parameters
+#     ----------
+#     dataset:
+#         Dataset containing spectrograms and labels.
+
+#     model:
+#         B-cos model implementing:
+#             - forward(x)
+#             - explain(x, idx)
+
+#         where explain(...) returns a dictionary containing
+#         "contribution_map".
+
+#     DEVICE:
+#         Torch device string.
+
+#     logger:
+#         Logger instance.
+
+#     Returns
+#     -------
+#     tuple[float, float]
+#         (
+#             original_accuracy,
+#             masked_accuracy,
+#         )
+#     """
+#     model.eval()
+
+#     n_samples = len(dataset)
+
+#     correct_original = 0
+#     correct_masked = 0
+
+#     for idx in tqdm(range(n_samples), desc="Evaluating positive masks"):
+#         img, label = dataset[idx]
+#         x = img.unsqueeze(0).to(DEVICE)
+
+#         x_expl = x.detach().clone().requires_grad_(True)
+#         with torch.enable_grad():
+#             expl_out = model.explain(x_expl)
+
+#         if expl_out["explained_class_idx"] == label:
+#             correct_original += 1
+
+#         contrib_map = (
+#             expl_out["contribution_map"].detach().squeeze(0).squeeze(0)
+#         )
+#         positive_mask = contrib_map > 0
+#         masked_img = img.clone().to(DEVICE)
+#         masked_img *= positive_mask.unsqueeze(0).to(masked_img.dtype)
+
+#         x_masked = masked_img.unsqueeze(0).to(DEVICE)
+
+#         with torch.no_grad():
+#             masked_logits = model(x_masked)
+
+#         masked_pred = int(masked_logits.argmax(dim=1).item())
+
+#         if masked_pred == label:
+#             correct_masked += 1
+
+#     original_accuracy = correct_original / n_samples
+#     masked_accuracy = correct_masked / n_samples
+
+#     return original_accuracy, masked_accuracy
