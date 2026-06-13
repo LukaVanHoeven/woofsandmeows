@@ -201,7 +201,7 @@ def _process_run(
         hop_length=run["hop_length"],
         n_mels=run["n_mels"],
         top_db=run["top_db"],
-        pre_transform=AudioAugment(run["samle_rate"]),
+        pre_transform=AudioAugment(run["sample_rate"]),
         post_transform=SpecAugment()
     )
     logger.debug(f"Dataset size: {len(dataset)}")
