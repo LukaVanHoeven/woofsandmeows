@@ -395,7 +395,7 @@ def _process_model(
             }
         ),
         "resnet18_baseline": (
-            lambda **kwargs: BaselineResNet(kwargs["num_classes"]),
+            lambda **kwargs: BaselineResNet(kwargs["num_classes"], kwargs["logger"]),
             {"logger": logger, "num_classes": dataset.get_n_classes()}
         )   
     }

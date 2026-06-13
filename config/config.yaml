@@ -11,7 +11,34 @@
 general:
     num_data_workers: 2 # Number of workers preparing batches, set to 0 if you get memory issues.
 jobs:
-    job0:
+    # job0:
+    #     ### data ####
+    #     sample_rate: [22050]
+    #     stride: [5]
+    #     duration: [5]
+    #     n_fft: [1024]
+    #     hop_length: [512]
+    #     n_mels: [128]
+    #     top_db: [60, 100]
+    #     train_val_split: [0.8, 0.2]
+    #     batch_size: [1, 8]
+    #     ### model ####
+    #     model: "resnet18_bcos"
+    #     model_params:
+    #         small_inputs: [0,1]
+    #     optimiser: "adam"
+    #     b: [2,5]
+    #     learning_rate: [0.000001, 0.001]
+    #     weight_decay: [0.000001, 0.001]
+    #     n_epochs: 50
+    #     k_folds: 1
+    #     ### hypertuning ####
+    #     tune: true
+    #     n_trials: 30
+    #     n_startup_trials: 6
+    #     min_epochs: 20
+    #     reduction_factor: 3
+    job1:
         ### data ####
         sample_rate: [22050]
         stride: [5]
@@ -23,40 +50,18 @@ jobs:
         train_val_split: [0.8, 0.2]
         batch_size: [1, 8]
         ### model ####
-        model: "resnet18_bcos"
+        model: "resnet18_baseline"
         model_params:
-            small_inputs: [0,1]
+            small_inputs: [1]
         optimiser: "adam"
         b: [2,5]
         learning_rate: [0.000001, 0.001]
         weight_decay: [0.000001, 0.001]
-        n_epochs: 50
+        n_epochs: 100
         k_folds: 1
         ### hypertuning ####
         tune: true
         n_trials: 30
-        n_startup_trials: 7
+        n_startup_trials: 6
         min_epochs: 20
         reduction_factor: 3
-
-    # job1:
-    #     sample_rate: [22050]
-    #     stride: [2.95]
-    #     duration: [2.95]
-    #     n_fft: [1024]
-    #     hop_length: [512]
-    #     n_mels: [128]
-    #     top_db: [80]
-    #     train_val_split: [0.8, 0.2]
-    #     batch_size: [8]
-    #     model: "resnet18_baseline"
-    #     model_params:
-    #         this_cant_be_empty_aparently: 69420
-    #     optimiser: "adam"
-    #     learning_rate: [0.0001]
-    #     weight_decay: [0.0001]
-    #     n_epochs: 20
-    #     k_folds: 1
-    #     tune: false
-    #     n_trials: 15
-    #     n_startup_trials: 5

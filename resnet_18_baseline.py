@@ -3,9 +3,13 @@ from torch import nn
 from torchvision.models import resnet18
 import os
 
-class BaselineResNet(nn.Module):
-    def __init__(self, num_classes: int):
+from base_model import BaseModel
+
+
+class BaselineResNet(BaseModel):
+    def __init__(self, num_classes: int, logger):
         super().__init__()
+        self.logger = logger
         self.model = resnet18(pretrained=False)
         
         # Adjust first convolution to accept 1-channel spectrograms
@@ -22,9 +26,3 @@ class BaselineResNet(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
-
-    def save(self, path):
-        torch.save(
-            self.state_dict(),
-            os.path.join(path, "baseline_resnet_best.pth")
-    )
