@@ -30,7 +30,7 @@ jobs:
         b: [2,5]
         learning_rate: [0.000001, 0.001]
         weight_decay: [0.000001, 0.001]
-        n_epochs: 50
+        n_epochs: 100
         k_folds: 1
         ### hypertuning ####
         tune: true
