@@ -94,7 +94,10 @@ def back_convert_entire_dataset(dataset, model, top_quantile, DEVICE, CONFIG, lo
         with torch.enable_grad():
             expl_out = model.explain(x_expl)
 
-        expl_out_wav = apply_explanation(expl_out["contribution_map"].unsqueeze(0), x_wav.to(DEVICE), top_quantile, logger, DEVICE, CONFIG)
+        try:
+            expl_out_wav = apply_explanation(expl_out["contribution_map"].unsqueeze(0), x_wav.to(DEVICE), top_quantile, logger, DEVICE, CONFIG)
+        except ValueError:
+            expl_out_wav = apply_explanation(expl_out["contribution_map"], x_wav.to(DEVICE), top_quantile, logger, DEVICE, CONFIG)
         audio_object = Audio(expl_out_wav.squeeze(0).detach().cpu().numpy(), rate=CONFIG["sample_rate"])
         with open(f'{output_folder}/i-{idx}_l-{REVERSE_LABEL_MAP[label]}_p-{REVERSE_LABEL_MAP[expl_out["explained_class_idx"]]}.wav', 'wb') as f:
             f.write(audio_object.data)
@@ -152,7 +155,10 @@ def grid_pointing_game_qual(
                 expl_out["contribution_map"].detach().squeeze(0).squeeze(0).cpu()
             )
 
-            expl_out_wav = apply_explanation(expl_out["contribution_map"].unsqueeze(0), x_wav.to(DEVICE), top_quantile, logger, DEVICE, CONFIG)
+            try:
+                expl_out_wav = apply_explanation(expl_out["contribution_map"].unsqueeze(0), x_wav.to(DEVICE), top_quantile, logger, DEVICE, CONFIG)
+            except ValueError:
+                expl_out_wav = apply_explanation(expl_out["contribution_map"], x_wav.to(DEVICE), top_quantile, logger, DEVICE, CONFIG)
             audio_object = Audio(expl_out_wav.squeeze(0).detach().cpu().numpy(), rate=CONFIG["sample_rate"])
             output_dir = f"{base_output_dir}/grid_{r}/"
             os.makedirs(output_dir, exist_ok=True)
