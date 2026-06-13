@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from lime_explainer import lime_image
+from lime import lime_image
 from skimage.segmentation import slic
 
 
